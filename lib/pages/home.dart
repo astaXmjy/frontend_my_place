@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/pages/contactus.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
+// HomePage with Bottom Navigation and API fetching
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
 
@@ -10,21 +13,63 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0; // Bottom navigation index
-
-  // Dummy data for subscribed places (replace with real data)
-  final List<String> _subscribedPlaces = [
-    'x_place',
-    'y_place',
-    'z_place',
-    'a_place',
-    'b_place',
-  ];
+  List<Map<String, dynamic>> _subscribedPlaces = []; // List to hold places data
 
   // Bottom navigation item tap handler
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  // Fetch subscribed places from the API
+  Future<void> _fetchSubscribedPlaces() async {
+    // Get token from SharedPreferences
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('auth_token');
+
+    if (token != null) {
+      try {
+        // Make the API request to fetch places
+        final response = await http.get(
+          Uri.parse(
+              'http://20.244.93.116/users/places'), // Replace with your API endpoint
+          headers: {
+            'Authorization':
+                'Bearer $token', // Sending token in the authorization header
+          },
+        );
+
+        if (response.statusCode == 200) {
+          // Parse the response
+          List<dynamic> placesData = json.decode(response.body);
+          setState(() {
+            _subscribedPlaces = placesData
+                .map((place) => {
+                      'name': place['name'] ??
+                          'Unnamed Place', // Safely get place name
+                      'address': place['address'] ??
+                          'No Address Provided', // Safely get address
+                    })
+                .toList();
+          });
+        } else {
+          // Handle the error if the response is not successful
+          print('Failed to load places');
+        }
+      } catch (error) {
+        // Handle any errors during the API request
+        print('Error fetching places: $error');
+      }
+    } else {
+      print('No token found');
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSubscribedPlaces(); // Fetch the places when the page loads
   }
 
   @override
@@ -42,16 +87,12 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
       body: _getSelectedPageContent(),
-      // Bottom Navigation Bar
+      // Bottom Navigation Bar without the "Add Place" button
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.add_location),
-            label: 'Add Place',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.place),
@@ -66,6 +107,19 @@ class _HomePageState extends State<HomePage> {
         selectedItemColor: Colors.green,
         onTap: _onItemTapped,
       ),
+      // Add floating action button for adding new place
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // Navigate to Create New Place Screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => const CreateNewPlaceScreen()),
+          );
+        },
+        child: const Icon(Icons.add),
+        backgroundColor: Colors.green,
+      ),
     );
   }
 
@@ -75,10 +129,8 @@ class _HomePageState extends State<HomePage> {
       case 0:
         return _buildSubscribedPlacesList();
       case 1:
-        return const CreateNewPlaceScreen();
-      case 2:
         return const CreatedPlacesScreen();
-      case 3:
+      case 2:
         return const ContactUsPage();
       default:
         return const Center(child: Text('Page not found'));
@@ -87,6 +139,11 @@ class _HomePageState extends State<HomePage> {
 
   // Widget to display the list of subscribed places
   Widget _buildSubscribedPlacesList() {
+    if (_subscribedPlaces.isEmpty) {
+      return const Center(
+          child: CircularProgressIndicator()); // Show loading indicator
+    }
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: ListView.builder(
@@ -97,10 +154,11 @@ class _HomePageState extends State<HomePage> {
             margin: const EdgeInsets.symmetric(vertical: 10),
             child: ListTile(
               leading: const Icon(Icons.place, color: Colors.green),
-              title: Text(_subscribedPlaces[index]),
+              title: Text(_subscribedPlaces[index]['name']!),
+              subtitle: Text(_subscribedPlaces[index]['address']!),
               onTap: () {
                 // Action when place is tapped (e.g., navigate to details)
-                print('Tapped on ${_subscribedPlaces[index]}');
+                print('Tapped on ${_subscribedPlaces[index]['name']}');
               },
             ),
           );
@@ -143,7 +201,7 @@ class CreatedPlacesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return const Center(
       child: Text(
         'Created Places Screen',
         style: TextStyle(fontSize: 24),
@@ -152,4 +210,17 @@ class CreatedPlacesScreen extends StatelessWidget {
   }
 }
 
-// Placeholder screen for Contact Us
+// Placeholder Contact Us Page
+class ContactUsPage extends StatelessWidget {
+  const ContactUsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Text(
+        'Contact Us Screen',
+        style: TextStyle(fontSize: 24),
+      ),
+    );
+  }
+}

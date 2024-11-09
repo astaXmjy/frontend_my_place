@@ -1,12 +1,64 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/pages/otp.dart';
+import 'package:http/http.dart' as http;
 import 'package:pinput/pinput.dart';
+import 'dart:convert';
 
-class PinSetupScreen extends StatelessWidget {
+class PinSetupScreen extends StatefulWidget {
+  const PinSetupScreen({super.key});
+
+  @override
+  _PinSetupScreenState createState() => _PinSetupScreenState();
+}
+
+class _PinSetupScreenState extends State<PinSetupScreen> {
+  String? _pin;
+  bool _isLoading = false;
+
+  // Signup method to send data to your API
+  Future<void> _signup(String mobileNumber, String address, String pin) async {
+    setState(() => _isLoading = true);
+    const String apiUrl = 'http://20.244.93.116/users'; // Update as needed
+
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          "mobile_no": mobileNumber,
+          "address": address,
+          "device_id": "string", // Include actual device ID if available
+          "password": pin,
+          "latitude": 0,
+          "longitude": 0
+        }),
+      );
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      if (response.statusCode == 201) {
+        Navigator.pushNamed(context, '/otp', arguments: mobileNumber);
+      } else {
+        _showError("Signup failed. Please try again.");
+      }
+    } catch (e) {
+      _showError("An error occurred. Please try again.");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // Method to show error messages in SnackBar
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final String mobileNumber =
-        ModalRoute.of(context)!.settings.arguments as String;
+    final args = ModalRoute.of(context)!.settings.arguments as Map<String, String>;
+    final String mobileNumber = args['mobileNumber']!;
+    final String address = args['address']!;
+
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -14,40 +66,29 @@ class PinSetupScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            // Logo Image
-            Image.asset(
-              'assets/logo.png', // Replace with your logo asset
-              height: 150,
+            Image.asset('assets/logo.png', height: 150),
+            const SizedBox(height: 40),
+            PinInputSection(
+              label: 'Enter 4-Digit PIN',
+              onPinChanged: (pin) => setState(() => _pin = pin),
             ),
-            SizedBox(height: 40),
-            // Set Pin field
-            PinInputSection(label: 'Set Pin'),
-            SizedBox(height: 20),
-            // Verify Pin field
-            PinInputSection(label: 'Verify Pin'),
-            SizedBox(height: 40),
-            // Save button
+            const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 15),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8.0),
                   ),
-                  backgroundColor: Colors.green, // Background color
+                  backgroundColor: Colors.green,
                 ),
-                onPressed: () {
-                  Navigator.pushNamed(context, '/otp',arguments:mobileNumber);
-                },
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('Save'),
-                    SizedBox(width: 5),
-                    Icon(Icons.arrow_forward),
-                  ],
-                ),
+                onPressed: (_pin?.length == 4 && !_isLoading)
+                    ? () => _signup(mobileNumber, address, _pin!)
+                    : null,
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Save', style: TextStyle(fontSize: 16)),
               ),
             ),
           ],
@@ -60,34 +101,29 @@ class PinSetupScreen extends StatelessWidget {
 // Widget to create the Pin Input section with a label
 class PinInputSection extends StatelessWidget {
   final String label;
+  final ValueChanged<String> onPinChanged;
 
-  PinInputSection({required this.label});
+  const PinInputSection({
+    required this.label,
+    required this.onPinChanged,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-        ),
-        SizedBox(height: 10),
+        Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 10),
         Pinput(
           length: 4,
           showCursor: true,
-          onChanged: (pin) {
-            // Handle logic for PIN input
-            print('Pin entered: $pin');
-          },
-          onCompleted: (pin) {
-            // Handle logic when PIN is fully entered
-            print('Pin completed: $pin');
-          },
+          onChanged: onPinChanged,
           defaultPinTheme: PinTheme(
             width: 60,
             height: 60,
-            textStyle: TextStyle(fontSize: 20, color: Colors.black),
+            textStyle: const TextStyle(fontSize: 20, color: Colors.black),
             decoration: BoxDecoration(
               border: Border.all(color: Colors.grey),
               borderRadius: BorderRadius.circular(8),
@@ -98,3 +134,4 @@ class PinInputSection extends StatelessWidget {
     );
   }
 }
+
