@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/addplace.dart';
+import 'package:frontend/pages/contactus.dart';
+import 'package:frontend/pages/createdplace.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+  const HomePage({super.key});
 
   @override
   _HomePageState createState() => _HomePageState();
@@ -35,6 +38,7 @@ class _HomePageState extends State<HomePage> {
         );
 
         if (response.statusCode == 200) {
+          print(token);
           List<dynamic> placesData = json.decode(response.body);
 
           setState(() {
@@ -112,12 +116,11 @@ class _HomePageState extends State<HomePage> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-                builder: (context) => const CreateNewPlaceScreen()),
+            MaterialPageRoute(builder: (context) => AddPlaceScreen()),
           );
         },
-        child: const Icon(Icons.add),
         backgroundColor: Colors.green,
+        child: const Icon(Icons.add),
       ),
     );
   }
@@ -127,7 +130,7 @@ class _HomePageState extends State<HomePage> {
       case 0:
         return _buildSubscribedPlacesList();
       case 1:
-        return const CreatedPlacesScreen();
+        return const CreatedPlaceScreen();
       case 2:
         return const ContactUsPage();
       default:
@@ -162,63 +165,6 @@ class _HomePageState extends State<HomePage> {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-// Placeholder screen for Create New Place
-class CreateNewPlaceScreen extends StatelessWidget {
-  const CreateNewPlaceScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Create New Place Screen',
-            style: TextStyle(fontSize: 24),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () {
-              // Implement create new place functionality
-            },
-            child: const Text('Add New Place'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Placeholder screen for Created Places
-class CreatedPlacesScreen extends StatelessWidget {
-  const CreatedPlacesScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Created Places Screen',
-        style: TextStyle(fontSize: 24),
-      ),
-    );
-  }
-}
-
-// Placeholder Contact Us Page
-class ContactUsPage extends StatelessWidget {
-  const ContactUsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Contact Us Screen',
-        style: TextStyle(fontSize: 24),
       ),
     );
   }

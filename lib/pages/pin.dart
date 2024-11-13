@@ -18,7 +18,6 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
   Future<void> _signup(String mobileNumber, String address, String pin) async {
     setState(() => _isLoading = true);
     const String apiUrl = 'http://20.244.93.116/users'; // Update as needed
-
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
@@ -35,7 +34,11 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
       print('Response status: ${response.statusCode}');
       print('Response body: ${response.body}');
       if (response.statusCode == 201) {
-        Navigator.pushNamed(context, '/otp', arguments: mobileNumber);
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/home',
+          (Route<dynamic> route) => false,
+        );
       } else {
         _showError("Signup failed. Please try again.");
       }
@@ -55,7 +58,8 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)!.settings.arguments as Map<String, String>;
+    final args =
+        ModalRoute.of(context)!.settings.arguments as Map<String, String>;
     final String mobileNumber = args['mobileNumber']!;
     final String address = args['address']!;
 
@@ -114,7 +118,8 @@ class PinInputSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+        Text(label,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
         const SizedBox(height: 10),
         Pinput(
           length: 4,
@@ -134,4 +139,3 @@ class PinInputSection extends StatelessWidget {
     );
   }
 }
-

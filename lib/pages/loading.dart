@@ -9,25 +9,26 @@ class LoadingPage extends StatefulWidget {
 
 class _LoadingPageState extends State<LoadingPage> {
   @override
-  void initState(){
+  void initState() {
     super.initState();
     _navigateToSignUp();
   }
-  Future<void> _navigateToSignUp() async{
-    await Future.delayed(const Duration(seconds:3));
-    Navigator.pushReplacementNamed(context, '/signup');
+
+  Future<void> _navigateToSignUp() async {
+    await Future.delayed(const Duration(seconds: 3));
+    Navigator.pushReplacementNamed(context, '/login');
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        body:  Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/bg.png'), // Replace with your image path
-              fit: BoxFit.cover, // Cover the entire screen
-            ),
-          ),
-        )
-    );
+        body: Container(
+      decoration: const BoxDecoration(
+        image: DecorationImage(
+          image: AssetImage('assets/bg.png'), // Replace with your image path
+          fit: BoxFit.cover, // Cover the entire screen
+        ),
+      ),
+    ));
   }
 }

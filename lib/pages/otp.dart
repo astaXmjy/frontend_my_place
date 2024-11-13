@@ -1,9 +1,16 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class OtpPage extends StatefulWidget {
-  final String phoneNumber; // Phone number passed from SignupPage
+  final String phoneNumber;
+  final String address; // Phone number passed from SignupPage
+  final String verificationId;
 
-  const OtpPage({super.key, required this.phoneNumber});
+  const OtpPage(
+      {super.key,
+      required this.phoneNumber,
+      required this.verificationId,
+      required this.address});
 
   @override
   State<OtpPage> createState() => _OtpPageState();
@@ -19,12 +26,40 @@ class _OtpPageState extends State<OtpPage> {
     super.dispose();
   }
 
-  void _verifyOtp() {
-    // Handle OTP verification here
-    String otp = _otpController.text;
-    Navigator.pushNamedAndRemoveUntil(context, '/home',
-        (Route<dynamic> route)=>false,);
-    // Proceed to next steps, e.g., navigating to another page if OTP is valid
+  Future<void> _verifyOtp() async {
+    String otp = _otpController.text.trim();
+    if (otp.isNotEmpty) {
+      try {
+        // Create a PhoneAuthCredential with the OTP and verificationId
+        PhoneAuthCredential credential = PhoneAuthProvider.credential(
+          verificationId: widget.verificationId,
+          smsCode: otp,
+        );
+
+        // Sign in with the credential
+        await FirebaseAuth.instance.signInWithCredential(credential);
+
+        // Navigate to the next screen if OTP verification is successful
+        Navigator.pushNamed(
+          context,
+          '/pin',
+          arguments: {
+            'mobileNumber': widget.phoneNumber,
+            'address': widget.address,
+          },
+        );
+        print('otp verified successfully');
+      } catch (e) {
+        // Display an error if OTP verification fails
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to verify OTP: ${e.toString()}')),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please enter the OTP')),
+      );
+    }
   }
 
   @override
