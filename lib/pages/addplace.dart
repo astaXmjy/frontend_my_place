@@ -16,6 +16,19 @@ class AddPlaceScreen extends StatefulWidget {
 class _AddPlaceScreenState extends State<AddPlaceScreen> {
   final _nameController = TextEditingController();
   final _addressController = TextEditingController();
+  final List<TextEditingController> _eventStartControllers =
+      List.generate(6, (_) => TextEditingController());
+  final List<TextEditingController> _eventEndControllers =
+      List.generate(6, (_) => TextEditingController());
+  final List<String> _eventNames = [
+    'Fazar',
+    'Johar',
+    'Azar',
+    'Magrib',
+    'Isha',
+    'Jumma'
+  ];
+
   LatLng? _selectedLocation;
   bool _isSubmitting = false;
 
@@ -45,6 +58,68 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
       print("Location permission denied");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Location permission is required to continue.")),
+      );
+    }
+  }
+
+  Future<void> _addEvents(int placeId) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('auth_token');
+
+    if (token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: JWT token not found.")),
+      );
+      return;
+    }
+
+    List<Map<String, dynamic>> eventList = [];
+    for (int i = 0; i < 6; i++) {
+      String startTime = _eventStartControllers[i].text;
+      String endTime = _eventEndControllers[i].text;
+
+      if (startTime.isEmpty || endTime.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  "Please fill in all start and end times for the events.")),
+        );
+        return;
+      }
+
+      eventList.add({
+        "name": _eventNames[i],
+        "start_time": startTime,
+        "end_time": endTime,
+        "place_id": placeId,
+      });
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://20.244.93.116/event'),
+        headers: {
+          "accept": "application/json",
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+        body: json.encode(eventList),
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Events added successfully!")),
+        );
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to add events: ${response.body}")),
+        );
+      }
+    } catch (error) {
+      print("Error: $error");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("An error occurred while adding the events.")),
       );
     }
   }
@@ -99,10 +174,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
       );
 
       if (response.statusCode == 201) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Place added successfully!")),
-        );
-        Navigator.pop(context);
+        int placeId = json.decode(response.body)['id'];
+        await _addEvents(placeId); // Add events after creating the place
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to add place: ${response.body}")),
@@ -124,77 +197,122 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          'Add Mosque',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: Text('Add Mosque'),
         backgroundColor: Colors.green,
-        iconTheme: IconThemeData(color: Colors.white),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: ListView(
           children: [
-            Text(
-              'Mosque Details',
-              style:
-                  TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
-            ),
             TextField(
               controller: _nameController,
-              decoration: InputDecoration(
-                labelText: 'Name',
-                labelStyle: TextStyle(color: Colors.green),
-                border: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.green),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.green),
-                ),
-              ),
+              decoration: InputDecoration(labelText: 'Mosque Name'),
             ),
-            SizedBox(height: 20),
-            Text(
-              'Address Details',
-              style:
-                  TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+            TextField(
+              controller: _addressController,
+              decoration: InputDecoration(labelText: 'Address'),
             ),
-            Row(
+            Column(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _addressController,
-                    decoration: InputDecoration(
-                      labelText: 'Address',
-                      labelStyle: TextStyle(color: Colors.green),
-                      border: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.green),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.green),
-                      ),
-                    ),
-                  ),
-                ),
                 IconButton(
-                  icon: Icon(Icons.location_on, color: Colors.green),
+                  icon: Icon(Icons.gps_fixed_rounded),
                   onPressed: _requestLocationPermission,
+                ),
+                Text(
+                  'Fetch Coordinates',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black54,
+                  ),
                 ),
               ],
             ),
             SizedBox(height: 20),
-            _isSubmitting
-                ? Center(child: CircularProgressIndicator(color: Colors.green))
-                : ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green, // Button color
-                      foregroundColor: Colors.white, // Text color
-                      padding: EdgeInsets.symmetric(vertical: 15),
-                    ),
-                    onPressed: _submitPlace,
-                    child: Text('Add Place', style: TextStyle(fontSize: 16)),
+            for (int i = 0; i < 6; i++)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _eventNames[i],
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            TimeOfDay? pickedTime = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.now(),
+                            );
+                            if (pickedTime != null) {
+                              setState(() {
+                                _eventStartControllers[i].text =
+                                    pickedTime.format(context);
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                                vertical: 16, horizontal: 8),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _eventStartControllers[i].text.isEmpty
+                                  ? 'Start Time'
+                                  : _eventStartControllers[i].text,
+                              style:
+                                  TextStyle(fontSize: 14, color: Colors.black),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            TimeOfDay? pickedTime = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.now(),
+                            );
+                            if (pickedTime != null) {
+                              setState(() {
+                                _eventEndControllers[i].text =
+                                    pickedTime.format(context);
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: EdgeInsets.symmetric(
+                                vertical: 16, horizontal: 8),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.grey),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _eventEndControllers[i].text.isEmpty
+                                  ? 'End Time'
+                                  : _eventEndControllers[i].text,
+                              style:
+                                  TextStyle(fontSize: 14, color: Colors.black),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                ],
+              ),
+            ElevatedButton(
+              onPressed: _isSubmitting ? null : _submitPlace,
+              child: _isSubmitting
+                  ? CircularProgressIndicator()
+                  : Text('Add Place and Events'),
+            ),
           ],
         ),
       ),

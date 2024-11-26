@@ -1,7 +1,14 @@
+import 'dart:ffi';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:frontend/audio_background/event.dart';
+import 'package:frontend/audio_background/eventscheduler.dart';
 import 'package:frontend/pages/addplace.dart';
 import 'package:frontend/pages/contactus.dart';
 import 'package:frontend/pages/createdplace.dart';
+import 'package:frontend/pages/placedetail.dart';
+import 'package:frontend/pages/placeitem.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,9 +21,13 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   int _selectedIndex = 0;
-  List<Map<String, String>> _subscribedPlaces = [];
+  List<Map<String, dynamic>> _subscribedPlaces = [];
+  List<Map<String, dynamic>> _searchResults = [];
   bool _isLoading = true;
+  bool _isSearching = false;
+  String _searchQuery = '';
 
   void _onItemTapped(int index) {
     setState(() {
@@ -32,24 +43,22 @@ class _HomePageState extends State<HomePage> {
       try {
         final response = await http.get(
           Uri.parse('http://20.244.93.116/users/places'),
-          headers: {
-            'Authorization': 'Bearer $token',
-          },
+          headers: {'Authorization': 'Bearer $token'},
         );
 
         if (response.statusCode == 200) {
-          print(token);
           List<dynamic> placesData = json.decode(response.body);
 
           setState(() {
-            _subscribedPlaces = placesData
-                .map((place) => {
-                      'name': place['name']?.toString() ?? 'Unnamed Place',
-                      'address':
-                          place['address']?.toString() ?? 'No Address Provided',
-                    })
-                .toList()
-                .cast<Map<String, String>>();
+            _subscribedPlaces = placesData.map((place) {
+              return {
+                'id': place['id'],
+                'name': place['name']?.toString() ?? 'Unnamed Place',
+                'address':
+                    place['address']?.toString() ?? 'No Address Provided',
+                'status': place['status'] ?? 'Unknown',
+              };
+            }).toList();
             _isLoading = false;
           });
         } else {
@@ -72,10 +81,144 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _searchPlaces(String query) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('auth_token');
+
+    if (token != null) {
+      try {
+        final response = await http.get(
+          Uri.parse('http://20.244.93.116/places/search?query=$query'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+
+        if (response.statusCode == 200) {
+          List<dynamic> resultsData = json.decode(response.body);
+
+          setState(() {
+            _searchResults = resultsData.map((place) {
+              return {
+                'id': place['id'],
+                'name': place['name']?.toString() ?? 'Unnamed Place',
+                'address':
+                    place['address']?.toString() ?? 'No Address Provided',
+                'status': place['status'] ?? 'Unknown',
+              };
+            }).toList();
+          });
+        } else {
+          print('Failed to fetch search results');
+        }
+      } catch (error) {
+        print('Error searching places: $error');
+      }
+    } else {
+      print('No token found');
+    }
+  }
+
+  Future<void> _subscribeToPlace(int placeId) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('auth_token');
+
+    if (token != null) {
+      try {
+        final response = await http.post(
+          Uri.parse('http://20.244.93.116/addplace/$placeId'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+
+        if (response.statusCode == 200) {
+          print('Subscribed successfully');
+          // Refresh subscribed places
+          _fetchSubscribedPlaces();
+        } else {
+          print('Failed to subscribe');
+        }
+      } catch (error) {
+        print('Error subscribing to place: $error');
+      }
+    } else {
+      print('No token found');
+    }
+  }
+
+  Future<void> fetchEvents(int placeId) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('auth_token');
+    final resposne = await http.get(
+      Uri.parse('http://20.244.93.116/event/$placeId'),
+      headers: {
+        'accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (resposne.statusCode == 200) {
+      final List<dynamic> eventList = json.decode(resposne.body);
+      final events = eventList.map((e) => Event.fromJson(e)).toList();
+      final String eventsJson = json.encode(eventList);
+      await prefs.setString('event_scheduled', eventsJson);
+    } else {
+      throw Exception('Failed  to load events');
+    }
+  }
+
+  Future<bool> _confirmEventSubscription(
+      BuildContext context, String placeName) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Subscribe to Event'),
+            content:
+                Text('Do you want to subscribe to events for "$placeName"? '
+                    'This will replace any existing event notification.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Confirm'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> fetchAndScheduleEvents(int placeId) async {
+    try {
+      await fetchEvents(placeId);
+      await scheduleNotificationsFromSavedEvents(placeId);
+      print('Notifications scheduled for events.');
+    } catch (e) {
+      print('Error scheduling notifications: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _fetchSubscribedPlaces();
+    requestNotificationPermissions();
+  }
+
+  Future<void> requestNotificationPermissions() async {
+    NotificationSettings settings = await _messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      print('User granted notification permissions');
+    } else if (settings.authorizationStatus ==
+        AuthorizationStatus.provisional) {
+      print('User granted provisional permissions');
+    } else {
+      print("User declined or has not accepted notification permissions");
+    }
   }
 
   @override
@@ -83,13 +226,26 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.green,
-        title: const TextField(
-          decoration: InputDecoration(
+        title: TextField(
+          decoration: const InputDecoration(
             hintText: 'Search places...',
             prefixIcon: Icon(Icons.search, color: Colors.white),
             border: InputBorder.none,
           ),
-          style: TextStyle(color: Colors.white),
+          style: const TextStyle(color: Colors.white),
+          onChanged: (value) {
+            setState(() {
+              _searchQuery = value;
+            });
+
+            if (value.isNotEmpty) {
+              _searchPlaces(value);
+            } else {
+              setState(() {
+                _searchResults = [];
+              });
+            }
+          },
         ),
       ),
       body: _getSelectedPageContent(),
@@ -113,12 +269,12 @@ class _HomePageState extends State<HomePage> {
         onTap: _onItemTapped,
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => AddPlaceScreen()),
-          );
-        },
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => AddPlaceScreen()),
+        ).then((value) {
+          if (value == true) _fetchSubscribedPlaces();
+        }),
         backgroundColor: Colors.green,
         child: const Icon(Icons.add),
       ),
@@ -126,16 +282,48 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _getSelectedPageContent() {
+    if (_searchQuery.isNotEmpty) {
+      return _buildSearchResults();
+    }
+
     switch (_selectedIndex) {
       case 0:
         return _buildSubscribedPlacesList();
       case 1:
-        return const CreatedPlaceScreen();
+        return const CreatedPlacePage();
       case 2:
         return const ContactUsPage();
       default:
         return const Center(child: Text('Page not found'));
     }
+  }
+
+  Widget _buildSearchResults() {
+    if (_searchResults.isEmpty) {
+      return const Center(child: Text('No results found.'));
+    }
+
+    return ListView.builder(
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        final place = _searchResults[index];
+        final isSubscribed = _subscribedPlaces.any((subPlace) =>
+            subPlace['id'] == place['id']); // Check if already subscribed
+
+        return ListTile(
+          title: Text(place['name']),
+          subtitle: Text(place['address']),
+          trailing: isSubscribed
+              ? null
+              : ElevatedButton(
+                  onPressed: () {
+                    _subscribeToPlace(place['id']);
+                  },
+                  child: const Text('Subscribe'),
+                ),
+        );
+      },
+    );
   }
 
   Widget _buildSubscribedPlacesList() {
@@ -147,25 +335,27 @@ class _HomePageState extends State<HomePage> {
       return const Center(child: Text('No places subscribed.'));
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: ListView.builder(
-        itemCount: _subscribedPlaces.length,
-        itemBuilder: (context, index) {
-          return Card(
-            elevation: 4,
-            margin: const EdgeInsets.symmetric(vertical: 10),
-            child: ListTile(
-              leading: const Icon(Icons.place, color: Colors.green),
-              title: Text(_subscribedPlaces[index]['name']!),
-              subtitle: Text(_subscribedPlaces[index]['address']!),
-              onTap: () {
-                print('Tapped on ${_subscribedPlaces[index]['name']}');
-              },
+    return ListView.builder(
+      itemCount: _subscribedPlaces.length,
+      itemBuilder: (context, index) {
+        final place = _subscribedPlaces[index];
+        return PlaceListItem(
+          place: place,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PlaceDetailScreen(place: place),
             ),
-          );
-        },
-      ),
+          ),
+          onFetchEvent: () async {
+            final confirmed =
+                await _confirmEventSubscription(context, place['name']);
+            if (confirmed) {
+              await fetchAndScheduleEvents(place['id']);
+            }
+          },
+        );
+      },
     );
   }
 }

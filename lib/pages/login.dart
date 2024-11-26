@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:pinput/pinput.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -16,6 +17,8 @@ class _LoginPageState extends State<LoginPage> {
   final _phoneController = TextEditingController();
   final _pinController = TextEditingController();
   bool _isLoading = false; // To show loading indicator during login
+
+  final FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   // Function to handle login and store token
   void _submitLogin() async {
@@ -50,6 +53,9 @@ class _LoginPageState extends State<LoginPage> {
 
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('auth_token', token);
+
+          await _secureStorage.write(key: "mobile_number", value: mobileNumber);
+          await _secureStorage.write(key: 'pin', value: pin);
 
           Navigator.pushReplacementNamed(context, '/home');
         } else {
