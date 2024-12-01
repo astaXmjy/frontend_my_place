@@ -1,23 +1,33 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:frontend/audio_background/eventscheduler.dart';
 import 'package:frontend/firebase_options.dart';
 import 'package:frontend/flutterpushnotifications/pushnotifications.dart';
 import 'package:frontend/pages/addevent.dart';
-import 'package:frontend/pages/addplace.dart';
 import 'package:frontend/pages/home.dart';
 import 'package:frontend/pages/loading.dart';
 import 'package:frontend/pages/login.dart';
 import 'package:frontend/pages/pin.dart';
 import 'package:frontend/pages/signup.dart';
+import 'package:frontend/pages/updates.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:workmanager/workmanager.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    await fetchAndScheduledEvents();
+    return Future.value(true);
+  });
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -32,6 +42,10 @@ Future<void> main() async {
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   NotificationService notificationService = NotificationService();
   await notificationService.initializeFirebase();
+  flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      .requestNotificationsPermission();
   runApp(const MyApp());
 }
 
@@ -63,12 +77,14 @@ class MyApp extends StatelessWidget {
         // '/addplace':(context)=> const AddPlaceScreen()
         '/addEvent': (context) => AddEventScreen(
             placeId: ModalRoute.of(context)!.settings.arguments as int),
+        '/updatePlace': (context) => UpdatesPage(
+            placeId: ModalRoute.of(context)!.settings.arguments as int),
       },
     );
   }
 }
 // class MyApp extends StatelessWidget {
-//   @override
+//   @overrides
 //   Widget build(BuildContext context) {
 //     return MaterialApp(
 //       home: NotificationTestPage(),

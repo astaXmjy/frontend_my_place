@@ -12,6 +12,7 @@ import 'package:frontend/pages/placeitem.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -28,6 +29,7 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading = true;
   bool _isSearching = false;
   String _searchQuery = '';
+  String? user_type;
 
   void _onItemTapped(int index) {
     setState(() {
@@ -57,6 +59,7 @@ class _HomePageState extends State<HomePage> {
                 'address':
                     place['address']?.toString() ?? 'No Address Provided',
                 'status': place['status'] ?? 'Unknown',
+                'created_by': place['created_by'],
               };
             }).toList();
             _isLoading = false;
@@ -143,6 +146,31 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _fetchUserDetails() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('auth_token');
+    try {
+      final response = await http.get(
+        Uri.parse('http://20.244.93.116/current_user'),
+        headers: {
+          'accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        setState(() {
+          user_type = jsonResponse['user_type'];
+        });
+        print(user_type);
+      } else {
+        print('Failed to get current user id');
+      }
+    } catch (e) {
+      print('Error fetching user details: $e');
+    }
+  }
+
   Future<void> fetchEvents(int placeId) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? token = prefs.getString('auth_token');
@@ -158,6 +186,7 @@ class _HomePageState extends State<HomePage> {
       final events = eventList.map((e) => Event.fromJson(e)).toList();
       final String eventsJson = json.encode(eventList);
       await prefs.setString('event_scheduled', eventsJson);
+      await prefs.setInt('placeId', placeId);
     } else {
       throw Exception('Failed  to load events');
     }
@@ -189,17 +218,27 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> fetchAndScheduleEvents(int placeId) async {
     try {
+      print('Fetching events for palceId: $placeId');
       await fetchEvents(placeId);
+
+      await cancelAllNotifications();
+
       await scheduleNotificationsFromSavedEvents(placeId);
       print('Notifications scheduled for events.');
     } catch (e) {
-      print('Error scheduling notifications: $e');
+      print(placeId);
+      print('Error scheduling notifications from home: $e');
     }
   }
 
   @override
   void initState() {
     super.initState();
+
+    Workmanager().registerPeriodicTask(
+        "eventSchedularTask", "fetchAndScheduledEvents",
+        frequency: Duration(hours: 24));
+    _fetchUserDetails();
     _fetchSubscribedPlaces();
     requestNotificationPermissions();
   }
@@ -250,16 +289,17 @@ class _HomePageState extends State<HomePage> {
       ),
       body: _getSelectedPageContent(),
       bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
+        items: <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: 'Home',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.place),
-            label: 'Places',
-          ),
-          BottomNavigationBarItem(
+          if (user_type != 'regular')
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.place),
+              label: 'Places',
+            ),
+          const BottomNavigationBarItem(
             icon: Icon(Icons.contact_mail),
             label: 'Contact Us',
           ),
@@ -268,16 +308,18 @@ class _HomePageState extends State<HomePage> {
         selectedItemColor: Colors.green,
         onTap: _onItemTapped,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => AddPlaceScreen()),
-        ).then((value) {
-          if (value == true) _fetchSubscribedPlaces();
-        }),
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: user_type != 'regular'
+          ? FloatingActionButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => AddPlaceScreen()),
+              ).then((value) {
+                if (value == true) _fetchSubscribedPlaces();
+              }),
+              backgroundColor: Colors.green,
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 
@@ -290,7 +332,7 @@ class _HomePageState extends State<HomePage> {
       case 0:
         return _buildSubscribedPlacesList();
       case 1:
-        return const CreatedPlacePage();
+        return user_type != 'regular' ? CreatedPlacePage() : ContactUsPage();
       case 2:
         return const ContactUsPage();
       default:

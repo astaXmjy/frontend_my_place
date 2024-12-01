@@ -1,6 +1,8 @@
 import 'dart:convert'; // For Base64 decoding
+import 'dart:ffi';
 import 'dart:typed_data'; // For ByteData
 import 'package:flutter/material.dart';
+import 'package:frontend/audio_background/eventscheduler.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +22,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
   bool isLoadingEvents = true;
   bool isLoadingUpdates = true;
   String? token;
+  int? user_id;
 
   @override
   void initState() {
@@ -31,13 +34,37 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     token = prefs.getString('auth_token');
     if (token != null) {
-      await Future.wait([_fetchEvents(), _fetchUpdates()]);
+      print(widget.place['created_by']);
+      await Future.wait([_fetchEvents(), _fetchUpdates(), _fetchUserDetails()]);
     } else {
       print('Token not found');
       setState(() {
         isLoadingEvents = false;
         isLoadingUpdates = false;
       });
+    }
+  }
+
+  Future<void> _fetchUserDetails() async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://20.244.93.116/current_user'),
+        headers: {
+          'accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        setState(() {
+          user_id = jsonResponse['id'];
+        });
+        print(user_id);
+      } else {
+        print('Failed to get current user id');
+      }
+    } catch (e) {
+      print('Error fetching user details: $e');
     }
   }
 
@@ -63,14 +90,19 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                     'end_time': event['end_time'],
                   })
               .toList();
+
+          isLoadingEvents = false;
         });
+        final String eventsJson = json.encode(data);
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('event_scheduled', eventsJson);
+        await cancelAllNotifications();
+        await scheduleNotificationsFromSavedEvents(placeId);
       } else {
         print('Failed to fetch events: ${response.statusCode}');
       }
     } catch (e) {
       print('Error fetching events: $e');
-    } finally {
-      setState(() => isLoadingEvents = false);
     }
   }
 
@@ -127,6 +159,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
       );
 
       if (response.statusCode == 200) {
+        print(response.body);
         print('Event updated successfully');
         await _fetchEvents();
       } else {
@@ -237,20 +270,32 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
       itemCount: events.length,
       itemBuilder: (context, index) {
         final event = events[index];
+        final isCreatedByUser = widget.place['created_by'] == user_id;
+
+        String formatTime(String time) {
+          final parsedTime = DateFormat("hh:mm:ss").parse(time);
+          return DateFormat("hh:mm a").format(parsedTime);
+        }
+
+        final formattedStartTime = formatTime(event['start_time']);
+        final formattedEndTime = formatTime(event['end_time']);
+
         return ListTile(
           title: Text(event['name']),
           subtitle: Text(
-            'Start: ${event['start_time']}\nEnd: ${event['end_time']}',
+            'Start: ${formattedStartTime}\nEnd: ${formattedEndTime}',
             style: const TextStyle(color: Colors.black54),
           ),
           leading: const Icon(Icons.event),
-          trailing: IconButton(
-            icon: const Icon(Icons.edit, color: Colors.green),
-            onPressed: () {
-              _showEditPopup(
-                  event['id'], event['start_time'], event['end_time']);
-            },
-          ),
+          trailing: isCreatedByUser
+              ? IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.green),
+                  onPressed: () {
+                    _showEditPopup(
+                        event['id'], event['start_time'], event['end_time']);
+                  },
+                )
+              : null,
         );
       },
     );

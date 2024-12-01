@@ -36,7 +36,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
       if (response.statusCode == 201) {
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/home',
+          '/login',
           (Route<dynamic> route) => false,
         );
       } else {

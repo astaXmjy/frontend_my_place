@@ -3,6 +3,7 @@ class Event {
   final String startTime;
   final String endTime;
   final int placeId;
+
   // final int event_id;
 
   Event({
@@ -17,7 +18,15 @@ class Event {
       name: json['name'],
       startTime: json['start_time'],
       endTime: json['end_time'],
-      placeId: json['place_id'],
+      placeId: json['place_id'] ?? 0,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'placeId': placeId,
+      'name': name,
+      'startTime': startTime,
+    };
   }
 }

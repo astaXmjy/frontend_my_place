@@ -41,6 +41,7 @@ class _CreatedPlacePageState extends State<CreatedPlacePage> {
               'id': place['id'],
               'name': place['name'],
               'address': place['address'],
+              'created_by': place['created_by']
             };
           }).toList();
         });
