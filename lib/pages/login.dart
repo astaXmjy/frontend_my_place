@@ -188,7 +188,7 @@ class _LoginPageState extends State<LoginPage> {
                         ? const CircularProgressIndicator() // Show progress indicator when loading
                         : const Text(
                             'Login',
-                            style: TextStyle(fontSize: 18),
+                            style: TextStyle(color: Colors.white, fontSize: 18),
                           ),
                   ),
                 ),

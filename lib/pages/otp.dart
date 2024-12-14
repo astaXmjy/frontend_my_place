@@ -83,7 +83,10 @@ class _OtpPageState extends State<OtpPage> {
             const Text(
               'Verity OTP',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 5),
             const Text(

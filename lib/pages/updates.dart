@@ -1,9 +1,12 @@
 import 'dart:io';
+// import 'dart:nativewrappers/_internal/vm/lib/typed_data_patch.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:typed_data';
 
 class UpdatesPage extends StatefulWidget {
   final int placeId; // Accept place ID as argument
@@ -64,6 +67,8 @@ class _UpdatesPageState extends State<UpdatesPage> {
           throw Exception('No token found in shared preferences');
         }
 
+        final compressedImage = await _compressAndReduceDetails(image);
+
         // API endpoint
         final uri = Uri.parse(
             'http://20.244.93.116/updates/${widget.placeId}?inf=$information');
@@ -74,7 +79,7 @@ class _UpdatesPageState extends State<UpdatesPage> {
           ..headers['accept'] = 'application/json'
           ..files.add(await http.MultipartFile.fromPath(
             'file',
-            image.path,
+            compressedImage.path,
             contentType: MediaType('image', 'png'),
           ));
 
@@ -104,6 +109,38 @@ class _UpdatesPageState extends State<UpdatesPage> {
         );
       }
     }
+  }
+
+  // function to convert image and reduce its size
+
+  Future<File> _compressAndReduceDetails(File imageFile) async {
+    const int maxSizeInBytes = 500 * 1024; // 500 KB
+    const int targetWidth = 500; // Target width in pixels for downscaling
+    const int targetHeight = 500; // Target height in pixels for downscaling
+    int quality = 20; // Very low quality for minimal details
+
+    Uint8List imageBytes = await imageFile.readAsBytes();
+
+    // Compress and downscale image
+    final Uint8List? compressedImage =
+        await FlutterImageCompress.compressWithList(
+      imageBytes,
+      minWidth: targetWidth,
+      minHeight: targetHeight,
+      quality: quality,
+      format: CompressFormat.png,
+    );
+
+    if (compressedImage == null) {
+      throw Exception('Failed to compress image');
+    }
+
+    // Create a temporary file with PNG format
+    final Directory tempDir = Directory.systemTemp;
+    final String tempPath = '${tempDir.path}/compressed_image_minimal.png';
+    final File tempFile = File(tempPath)..writeAsBytesSync(compressedImage);
+
+    return tempFile;
   }
 
   @override

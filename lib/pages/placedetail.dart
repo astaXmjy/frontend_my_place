@@ -93,11 +93,6 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
 
           isLoadingEvents = false;
         });
-        final String eventsJson = json.encode(data);
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString('event_scheduled', eventsJson);
-        await cancelAllNotifications();
-        await scheduleNotificationsFromSavedEvents(placeId);
       } else {
         print('Failed to fetch events: ${response.statusCode}');
       }
@@ -192,7 +187,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Edit Event'),
+          title: const Text('Edit Namaj'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -200,7 +195,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                 TextField(
                   controller: startTimeController,
                   decoration: const InputDecoration(
-                    labelText: 'Start Time',
+                    labelText: 'Azan',
                     hintText: 'Enter start time',
                   ),
                   onTap: () async {
@@ -218,7 +213,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                 TextField(
                   controller: endTimeController,
                   decoration: const InputDecoration(
-                    labelText: 'End Time',
+                    labelText: 'Jamat',
                     hintText: 'Enter end time',
                   ),
                   onTap: () async {
@@ -266,38 +261,91 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
     } else if (events.isEmpty) {
       return const Text('No events found for this place');
     }
-    return ListView.builder(
-      itemCount: events.length,
-      itemBuilder: (context, index) {
-        final event = events[index];
-        final isCreatedByUser = widget.place['created_by'] == user_id;
 
-        String formatTime(String time) {
-          final parsedTime = DateFormat("hh:mm:ss").parse(time);
-          return DateFormat("hh:mm a").format(parsedTime);
-        }
+    final smallTextStyle = TextStyle(fontSize: 16); // Smaller font size
 
-        final formattedStartTime = formatTime(event['start_time']);
-        final formattedEndTime = formatTime(event['end_time']);
+    // Separate Jumma event and other events
+    final List<Map<String, dynamic>> nonJummaEvents = [];
+    Map<String, dynamic>? jummaEvent;
 
-        return ListTile(
-          title: Text(event['name']),
-          subtitle: Text(
-            'Start: ${formattedStartTime}\nEnd: ${formattedEndTime}',
-            style: const TextStyle(color: Colors.black54),
-          ),
-          leading: const Icon(Icons.event),
-          trailing: isCreatedByUser
-              ? IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.green),
-                  onPressed: () {
-                    _showEditPopup(
-                        event['id'], event['start_time'], event['end_time']);
-                  },
-                )
-              : null,
-        );
-      },
+    for (var event in events) {
+      if (event['name'].toLowerCase() == 'jumma') {
+        jummaEvent = event;
+      } else {
+        nonJummaEvents.add(event);
+      }
+    }
+
+    // Append Jumma event at the end if it exists
+    if (jummaEvent != null) {
+      nonJummaEvents.add(jummaEvent);
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.vertical, // Enable vertical scrolling
+        child: DataTable(
+          horizontalMargin: 0,
+          columnSpacing: 25,
+          dataRowHeight: 30, // Reduce row height
+          headingRowHeight: 40, // Reduce header row height
+          columns: [
+            DataColumn(
+              label: Text('Namaj', style: smallTextStyle),
+            ),
+            DataColumn(
+              label: Text('Azan', style: smallTextStyle),
+            ),
+            DataColumn(
+              label: Text('Jamat', style: smallTextStyle),
+            ),
+            DataColumn(
+              label: Text('', style: smallTextStyle),
+            ),
+          ],
+          rows: nonJummaEvents.map((event) {
+            final isCreatedByUser = widget.place['created_by'] == user_id;
+
+            String formatTime(String time) {
+              final parsedTime = DateFormat("hh:mm:ss").parse(time);
+              return DateFormat("hh:mm a").format(parsedTime);
+            }
+
+            final formattedStartTime = formatTime(event['start_time']);
+            final formattedEndTime = formatTime(event['end_time']);
+
+            return DataRow(
+              color: MaterialStateProperty.resolveWith<Color?>(
+                (states) {
+                  // Highlight row if it's Jumma
+                  if (event['name'].toLowerCase() == 'jumma') {
+                    return Colors.green.withOpacity(0.4); // Highlight color
+                  }
+                  return null; // Default color
+                },
+              ),
+              cells: [
+                DataCell(Text(event['name'], style: smallTextStyle)),
+                DataCell(Text(formattedStartTime, style: smallTextStyle)),
+                DataCell(Text(formattedEndTime, style: smallTextStyle)),
+                DataCell(
+                  isCreatedByUser
+                      ? IconButton(
+                          icon: const Icon(Icons.edit,
+                              size: 16, color: Colors.green), // Smaller icon
+                          onPressed: () {
+                            _showEditPopup(event['id'], event['start_time'],
+                                event['end_time']);
+                          },
+                        )
+                      : const SizedBox(), // Empty placeholder if not created by the user
+                ),
+              ],
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 
@@ -311,16 +359,46 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
       itemCount: updates.length,
       itemBuilder: (context, index) {
         final update = updates[index];
+        String formatTime(String time) {
+          final utcTime = DateTime.parse(time);
+          final localTime = utcTime.toLocal();
+          return DateFormat('MM/dd/yyyy hh:mm a').format(localTime);
+        }
+
         Uint8List? imageBytes;
         if (update['image'] != null && update['image'].isNotEmpty) {
           imageBytes = base64Decode(update['image']);
         }
         return ListTile(
           title: Text(update['information']),
-          subtitle: Text('Created at: ${update['created_at']}'),
+          subtitle: Text('Created at: ${formatTime(update['created_at'])}'),
           leading: imageBytes != null
-              ? Image.memory(imageBytes,
-                  width: 50, height: 50, fit: BoxFit.cover)
+              ? GestureDetector(
+                  onTap: () {
+                    // Show image in a dialog when clicked
+                    showDialog(
+                      context: context,
+                      builder: (context) {
+                        return Dialog(
+                          child: Image.memory(
+                            imageBytes!,
+                            width:
+                                300, // Set a fixed width for the dialog image
+                            height:
+                                300, // Set a fixed height for the dialog image
+                            fit: BoxFit.cover,
+                          ),
+                        );
+                      },
+                    );
+                  },
+                  child: Image.memory(
+                    imageBytes,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                  ),
+                )
               : const Icon(Icons.image_not_supported),
         );
       },
@@ -351,7 +429,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             Text(widget.place['address'], style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 16),
-            const Text('Events',
+            const Text('Namaj Timings',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             Expanded(child: _buildEventList()),
             const SizedBox(height: 16),

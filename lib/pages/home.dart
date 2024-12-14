@@ -2,8 +2,8 @@ import 'dart:ffi';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:frontend/audio_background/event.dart';
 import 'package:frontend/audio_background/eventscheduler.dart';
+import 'package:frontend/audio_background/fetchevents.dart';
 import 'package:frontend/pages/addplace.dart';
 import 'package:frontend/pages/contactus.dart';
 import 'package:frontend/pages/createdplace.dart';
@@ -12,7 +12,6 @@ import 'package:frontend/pages/placeitem.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:workmanager/workmanager.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -172,7 +171,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> fetchEvents(int placeId) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
     String? token = prefs.getString('auth_token');
     final resposne = await http.get(
       Uri.parse('http://20.244.93.116/event/$placeId'),
@@ -183,9 +182,14 @@ class _HomePageState extends State<HomePage> {
     );
     if (resposne.statusCode == 200) {
       final List<dynamic> eventList = json.decode(resposne.body);
-      final events = eventList.map((e) => Event.fromJson(e)).toList();
-      final String eventsJson = json.encode(eventList);
-      await prefs.setString('event_scheduled', eventsJson);
+      final List<dynamic> filteredEvents = eventList.map((event) {
+        return {
+          "name": event['name'],
+          'start_time': event['start_time'],
+        };
+      }).toList();
+      print(jsonEncode(filteredEvents));
+      await prefs.setString('events', jsonEncode(filteredEvents));
       await prefs.setInt('placeId', placeId);
     } else {
       throw Exception('Failed  to load events');
@@ -216,6 +220,30 @@ class _HomePageState extends State<HomePage> {
         false;
   }
 
+  Future<bool> onSilentNotification(
+      BuildContext context, String placeName) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Unsubscribe to Event'),
+            content:
+                Text('Do you want to Unsubscribe to events for "$placeName"? '
+                    'This will cancel all notification'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Confirm'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<void> fetchAndScheduleEvents(int placeId) async {
     try {
       print('Fetching events for palceId: $placeId');
@@ -223,7 +251,8 @@ class _HomePageState extends State<HomePage> {
 
       await cancelAllNotifications();
 
-      await scheduleNotificationsFromSavedEvents(placeId);
+      await scheduleDailyNotificationsFromStorage();
+
       print('Notifications scheduled for events.');
     } catch (e) {
       print(placeId);
@@ -235,9 +264,14 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
 
-    Workmanager().registerPeriodicTask(
-        "eventSchedularTask", "fetchAndScheduledEvents",
-        frequency: Duration(hours: 24));
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      if (message.data['action'] == 'fetch_updated_event') {
+        print('this is for foreground');
+        await cancelAllNotifications();
+        await fetchEventsPlaceSaved();
+        await scheduleDailyNotificationsFromStorage();
+      }
+    });
     _fetchUserDetails();
     _fetchSubscribedPlaces();
     requestNotificationPermissions();
@@ -276,7 +310,6 @@ class _HomePageState extends State<HomePage> {
             setState(() {
               _searchQuery = value;
             });
-
             if (value.isNotEmpty) {
               _searchPlaces(value);
             } else {
