@@ -48,7 +48,8 @@ class _HomePageState extends State<HomePage> {
         );
 
         if (response.statusCode == 200) {
-          List<dynamic> placesData = json.decode(response.body);
+          List<dynamic> placesData =
+              json.decode(utf8.decode(response.bodyBytes));
 
           setState(() {
             _subscribedPlaces = placesData.map((place) {
@@ -86,16 +87,16 @@ class _HomePageState extends State<HomePage> {
   Future<void> _searchPlaces(String query) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? token = prefs.getString('auth_token');
-
     if (token != null) {
       try {
         final response = await http.get(
           Uri.parse('http://20.244.93.116/places/search?query=$query'),
           headers: {'Authorization': 'Bearer $token'},
         );
-
         if (response.statusCode == 200) {
-          List<dynamic> resultsData = json.decode(response.body);
+          print(utf8.decode(response.bodyBytes));
+          List<dynamic> resultsData =
+              json.decode(utf8.decode(response.bodyBytes));
 
           setState(() {
             _searchResults = resultsData.map((place) {

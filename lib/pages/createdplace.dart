@@ -34,7 +34,7 @@ class _CreatedPlacePageState extends State<CreatedPlacePage> {
       );
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+        final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
         setState(() {
           places = data.map((place) {
             return {

@@ -154,7 +154,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
       );
 
       if (response.statusCode == 200) {
-        print(response.body);
+        print(utf8.decode(response.bodyBytes));
         print('Event updated successfully');
         await _fetchEvents();
       } else {
@@ -429,7 +429,7 @@ class _PlaceDetailScreenState extends State<PlaceDetailScreen> {
                     const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             Text(widget.place['address'], style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 16),
-            const Text('Namaj Timings',
+            const Text('Namaz Timings',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             Expanded(child: _buildEventList()),
             const SizedBox(height: 16),
