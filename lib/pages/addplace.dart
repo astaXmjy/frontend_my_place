@@ -89,8 +89,8 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
 
       eventList.add({
         "name": _eventNames[i],
-        "start_time": startTime,
-        "end_time": endTime,
+        "Azan": startTime,
+        "Jamat": endTime,
         "place_id": placeId,
       });
     }
@@ -174,7 +174,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
       );
 
       if (response.statusCode == 201) {
-        int placeId = json.decode(response.body)['id'];
+        int placeId = await json.decode(response.body)['id'];
         await _addEvents(placeId); // Add events after creating the place
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -262,7 +262,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                             ),
                             child: Text(
                               _eventStartControllers[i].text.isEmpty
-                                  ? 'Start Time'
+                                  ? 'Azaan'
                                   : _eventStartControllers[i].text,
                               style:
                                   TextStyle(fontSize: 14, color: Colors.black),
@@ -294,7 +294,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
                             ),
                             child: Text(
                               _eventEndControllers[i].text.isEmpty
-                                  ? 'End Time'
+                                  ? 'Jamat'
                                   : _eventEndControllers[i].text,
                               style:
                                   TextStyle(fontSize: 14, color: Colors.black),
@@ -309,9 +309,7 @@ class _AddPlaceScreenState extends State<AddPlaceScreen> {
               ),
             ElevatedButton(
               onPressed: _isSubmitting ? null : _submitPlace,
-              child: _isSubmitting
-                  ? CircularProgressIndicator()
-                  : Text('Add Place and Events'),
+              child: _isSubmitting ? CircularProgressIndicator() : Text('Add'),
             ),
           ],
         ),

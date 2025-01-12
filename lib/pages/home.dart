@@ -22,6 +22,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  TextEditingController _searchController = TextEditingController();
   int _selectedIndex = 0;
   List<Map<String, dynamic>> _subscribedPlaces = [];
   List<Map<String, dynamic>> _searchResults = [];
@@ -295,65 +296,92 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<bool> onPopScope() async {
+    if (_searchQuery.isNotEmpty) {
+      print('back_gesture');
+      _clearSearch();
+      return false;
+    }
+    return true;
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+      _searchResults = [];
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.green,
-        title: TextField(
-          decoration: const InputDecoration(
-            hintText: 'Search places...',
-            prefixIcon: Icon(Icons.search, color: Colors.white),
-            border: InputBorder.none,
-          ),
-          style: const TextStyle(color: Colors.white),
-          onChanged: (value) {
-            setState(() {
-              _searchQuery = value;
-            });
-            if (value.isNotEmpty) {
-              _searchPlaces(value);
-            } else {
-              setState(() {
-                _searchResults = [];
-              });
-            }
-          },
-        ),
-      ),
-      body: _getSelectedPageContent(),
-      bottomNavigationBar: BottomNavigationBar(
-        items: <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          if (user_type != 'regular')
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.place),
-              label: 'Places',
+    return WillPopScope(
+      onWillPop: onPopScope,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.green,
+          title: TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              hintText: 'Search places...',
+              prefixIcon: Icon(Icons.search, color: Colors.white),
+              border: InputBorder.none,
             ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.contact_mail),
-            label: 'Contact Us',
+            style: const TextStyle(color: Colors.white),
+            onChanged: (value) {
+              setState(() {
+                _searchQuery = value;
+              });
+              if (value.isNotEmpty) {
+                _searchPlaces(value);
+              } else {
+                setState(() {
+                  _searchResults = [];
+                });
+              }
+            },
           ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.green,
-        onTap: _onItemTapped,
+        ),
+        body: _getSelectedPageContent(),
+        bottomNavigationBar: BottomNavigationBar(
+          items: <BottomNavigationBarItem>[
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            if (user_type != 'regular')
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.place),
+                label: 'Places',
+              ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.contact_mail),
+              label: 'Contact Us',
+            ),
+          ],
+          currentIndex: _selectedIndex,
+          selectedItemColor: Colors.green,
+          onTap: _onItemTapped,
+        ),
+        floatingActionButton: user_type != 'regular'
+            ? FloatingActionButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AddPlaceScreen()),
+                ).then((value) {
+                  if (value == true) _fetchSubscribedPlaces();
+                }),
+                backgroundColor: Colors.green,
+                child: const Icon(Icons.add),
+              )
+            : null,
       ),
-      floatingActionButton: user_type != 'regular'
-          ? FloatingActionButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => AddPlaceScreen()),
-              ).then((value) {
-                if (value == true) _fetchSubscribedPlaces();
-              }),
-              backgroundColor: Colors.green,
-              child: const Icon(Icons.add),
-            )
-          : null,
     );
   }
 

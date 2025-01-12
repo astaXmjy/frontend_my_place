@@ -14,6 +14,8 @@ Future<void> cancelAllNotifications() async {
 }
 
 Future<void> scheduleDailyNotificationsFromStorage() async {
+  tz.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
   final now = DateTime.now();
 
   try {
